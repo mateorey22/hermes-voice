@@ -1,0 +1,453 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Hermes Voice</title>
+<style>
+  *{margin:0;padding:0;box-sizing:border-box}
+  :root{
+    --bg:#0D0D0D;--bg2:#141414;--bg3:#1A1A1A;
+    --orange:#FC4C02;--orange-dim:rgba(252,76,2,.15);
+    --white:#F0F0F0;--gray:#666;--gray2:#444;
+    --green:#22C55E;--red:#EF4444;
+  }
+  html,body{height:100%;font-family:'Inter',-apple-system,BlinkMacSystemFont,sans-serif;background:var(--bg);color:var(--white);overflow:hidden}
+
+  /* ── Main Layout ── */
+  .app{display:flex;flex-direction:column;height:100vh;align-items:center;justify-content:center;position:relative}
+
+  /* ── Header ── */
+  .header{position:absolute;top:0;left:0;right:0;padding:24px 32px;display:flex;align-items:center;justify-content:space-between}
+  .logo{display:flex;align-items:center;gap:10px;font-size:14px;font-weight:600;letter-spacing:2px;text-transform:uppercase;color:var(--gray)}
+  .logo .icon{width:8px;height:8px;border-radius:50%;background:var(--orange)}
+  .status{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--gray)}
+  .status .dot{width:6px;height:6px;border-radius:50%;background:var(--gray2);transition:background .3s}
+  .status.connected .dot{background:var(--green)}
+
+  /* ── Orb Container ── */
+  .orb-container{position:relative;width:280px;height:280px;display:flex;align-items:center;justify-content:center}
+
+  /* ── Audio Orb ── */
+  .orb{width:200px;height:200px;border-radius:50%;background:radial-gradient(circle at 40% 40%,#1a1a1a,#0d0d0d);box-shadow:0 0 60px rgba(252,76,2,.08),inset 0 0 40px rgba(0,0,0,.5);transition:all .4s ease;position:relative;cursor:pointer}
+  .orb:hover{box-shadow:0 0 80px rgba(252,76,2,.15),inset 0 0 40px rgba(0,0,0,.5)}
+  .orb.listening{box-shadow:0 0 100px rgba(252,76,2,.25),0 0 200px rgba(252,76,2,.1),inset 0 0 40px rgba(0,0,0,.3)}
+  .orb.speaking{box-shadow:0 0 100px rgba(34,197,94,.25),0 0 200px rgba(34,197,94,.1),inset 0 0 40px rgba(0,0,0,.3)}
+  .orb.thinking{box-shadow:0 0 80px rgba(252,76,2,.15),inset 0 0 40px rgba(0,0,0,.5)}
+
+  /* Pulse rings */
+  .pulse-ring{position:absolute;border-radius:50%;border:1px solid var(--orange);opacity:0;pointer-events:none}
+  .orb.listening ~ .pulse-ring{animation:pulse 2s ease-out infinite}
+  .orb.speaking ~ .pulse-ring{border-color:var(--green);animation:pulse 1.5s ease-out infinite}
+  .pulse-ring:nth-child(2){width:240px;height:240px;animation-delay:.3s!important}
+  .pulse-ring:nth-child(3){width:280px;height:280px;animation-delay:.6s!important}
+  @keyframes pulse{0%{opacity:.6;transform:scale(.8)}100%{opacity:0;transform:scale(1.2)}}
+
+  /* Center icon */
+  .orb-icon{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);font-size:40px;opacity:.6;transition:all .3s}
+  .orb.listening .orb-icon{opacity:1;color:var(--orange)}
+  .orb.speaking .orb-icon{opacity:1;color:var(--green)}
+
+  /* ── Waveform Visualizer ── */
+  .visualizer{display:flex;align-items:center;justify-content:center;gap:3px;height:40px;margin-top:40px}
+  .visualizer .bar{width:3px;background:var(--orange);border-radius:2px;transition:height .05s;min-height:4px}
+  .visualizer.speaking .bar{background:var(--green)}
+
+  /* ── Status Text ── */
+  .status-text{margin-top:24px;font-size:14px;color:var(--gray);text-align:center;min-height:20px;transition:opacity .3s}
+
+  /* ── Transcript ── */
+  .transcript{position:absolute;bottom:0;left:0;right:0;max-height:200px;overflow-y:auto;padding:20px 32px;background:linear-gradient(transparent,rgba(13,13,13,.95) 30%)}
+  .transcript:empty{display:none}
+  .msg{margin-bottom:8px;font-size:13px;line-height:1.5;opacity:.8}
+  .msg.user{color:var(--orange)}
+  .msg.hermes{color:var(--white)}
+  .msg.system{color:var(--gray);font-style:italic;font-size:11px}
+  .msg .label{font-weight:600;margin-right:6px}
+
+  /* ── Controls ── */
+  .controls{position:absolute;bottom:200px;display:flex;gap:16px}
+  .btn{width:48px;height:48px;border-radius:50%;border:1px solid var(--gray2);background:var(--bg2);color:var(--gray);cursor:pointer;display:flex;align-items:center;justify-content:center;transition:all .2s;font-size:18px}
+  .btn:hover{border-color:var(--orange);color:var(--orange)}
+  .btn.active{background:var(--orange);border-color:var(--orange);color:var(--white)}
+
+  /* ── Scrollbar ── */
+  .transcript::-webkit-scrollbar{width:4px}
+  .transcript::-webkit-scrollbar-track{background:transparent}
+  .transcript::-webkit-scrollbar-thumb{background:var(--gray2);border-radius:2px}
+
+  /* ── Error banner ── */
+  .error-banner{position:absolute;top:80px;left:50%;transform:translateX(-50%);background:rgba(239,68,68,.15);border:1px solid rgba(239,68,68,.3);color:var(--red);padding:10px 20px;border-radius:8px;font-size:13px;display:none}
+
+  /* ── Key hint ── */
+  .key-hint{position:absolute;bottom:170px;font-size:11px;color:var(--gray2)}
+</style>
+</head>
+<body>
+<div class="app">
+  <div class="header">
+    <div class="logo"><div class="icon"></div>Hermes Voice</div>
+    <div class="status" id="status"><div class="dot"></div><span>Déconnecté</span></div>
+  </div>
+
+  <div class="error-banner" id="error"></div>
+
+  <div class="orb-container">
+    <div class="orb" id="orb" title="Click to toggle">
+      <div class="orb-icon" id="orb-icon">🎙</div>
+    </div>
+    <div class="pulse-ring"></div>
+    <div class="pulse-ring"></div>
+    <div class="pulse-ring"></div>
+  </div>
+
+  <div class="visualizer" id="visualizer">
+    <!-- bars generated by JS -->
+  </div>
+
+  <div class="status-text" id="status-text">Click to start</div>
+
+  <div class="key-hint">Space to toggle · M to mute</div>
+
+  <div class="controls">
+    <button class="btn" id="btn-mute" title="Mute">🔇</button>
+    <button class="btn" id="btn-clear" title="Clear">✕</button>
+  </div>
+
+  <div class="transcript" id="transcript"></div>
+</div>
+
+<script>
+const STATE = {
+  ws: null,
+  audioCtx: null,
+  mediaStream: null,
+  processor: null,
+  isListening: false,
+  isMuted: false,
+  isSpeaking: false,
+  isReady: false,
+  audioQueue: [],
+  playingSource: null,
+};
+
+const $ = id => document.getElementById(id);
+const orb = $('orb');
+const statusEl = $('status');
+const statusText = $('status-text');
+const transcript = $('transcript');
+const visualizer = $('visualizer');
+const errorEl = $('error');
+
+// Create visualizer bars
+const BAR_COUNT = 32;
+for (let i = 0; i < BAR_COUNT; i++) {
+  const bar = document.createElement('div');
+  bar.className = 'bar';
+  bar.style.height = '4px';
+  visualizer.appendChild(bar);
+}
+const bars = visualizer.querySelectorAll('.bar');
+
+function setOrbState(state) {
+  orb.className = 'orb ' + state;
+  if (state === 'listening') {
+    $('orb-icon').textContent = '🎙';
+    statusText.textContent = 'Listening...';
+  } else if (state === 'speaking') {
+    $('orb-icon').textContent = '🔊';
+    statusText.textContent = 'Speaking...';
+    visualizer.className = 'visualizer speaking';
+  } else if (state === 'thinking') {
+    $('orb-icon').textContent = '⚙';
+    statusText.textContent = 'Thinking...';
+  } else {
+    $('orb-icon').textContent = '🎙';
+    statusText.textContent = STATE.isReady ? 'Click to start' : 'Connecting...';
+    visualizer.className = 'visualizer';
+  }
+}
+
+function setStatus(connected) {
+  statusEl.className = 'status' + (connected ? ' connected' : '');
+  statusEl.querySelector('span').textContent = connected ? 'Connecté' : 'Déconnecté';
+}
+
+function showError(msg) {
+  errorEl.textContent = msg;
+  errorEl.style.display = 'block';
+  setTimeout(() => errorEl.style.display = 'none', 5000);
+}
+
+function addMessage(text, type) {
+  const div = document.createElement('div');
+  div.className = 'msg ' + type;
+  const label = type === 'user' ? 'Vous' : type === 'hermes' ? 'Hermes' : '';
+  div.innerHTML = label ? `<span class="label">${label}:</span>${escapeHtml(text)}` : escapeHtml(text);
+  transcript.appendChild(div);
+  transcript.scrollTop = transcript.scrollHeight;
+}
+
+function escapeHtml(t) {
+  return t.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+// ── Audio Processing ──
+
+async function startAudio() {
+  try {
+    STATE.mediaStream = await navigator.mediaDevices.getUserMedia({
+      audio: {
+        sampleRate: 16000,
+        channelCount: 1,
+        echoCancellation: true,
+        noiseSuppression: true,
+      }
+    });
+
+    STATE.audioCtx = new AudioContext({ sampleRate: 16000 });
+    const source = STATE.audioCtx.createMediaStreamSource(STATE.mediaStream);
+
+    // ScriptProcessor for PCM extraction
+    STATE.processor = STATE.audioCtx.createScriptProcessor(4096, 1, 1);
+    STATE.processor.onaudioprocess = (e) => {
+      if (!STATE.isListening || !STATE.ws || STATE.ws.readyState !== WebSocket.OPEN) return;
+
+      const float32 = e.inputBuffer.getChannelData(0);
+      // Convert float32 to int16 PCM
+      const int16 = new Int16Array(float32.length);
+      for (let i = 0; i < float32.length; i++) {
+        int16[i] = Math.max(-32768, Math.min(32767, float32[i] * 32768));
+      }
+      // Base64 encode
+      const bytes = new Uint8Array(int16.buffer);
+      const b64 = btoa(String.fromCharCode(...bytes));
+
+      STATE.ws.send(JSON.stringify({ type: 'audio', data: b64 }));
+
+      // Update visualizer from mic
+      updateVisualizer(float32);
+    };
+
+    source.connect(STATE.processor);
+    STATE.processor.connect(STATE.audioCtx.destination);
+  } catch (err) {
+    showError('Microphone access denied. Please allow microphone.');
+    console.error(err);
+  }
+}
+
+function stopAudio() {
+  if (STATE.processor) { STATE.processor.disconnect(); STATE.processor = null; }
+  if (STATE.mediaStream) { STATE.mediaStream.getTracks().forEach(t => t.stop()); STATE.mediaStream = null; }
+}
+
+function updateVisualizer(float32Array) {
+  const step = Math.floor(float32Array.length / BAR_COUNT);
+  for (let i = 0; i < BAR_COUNT; i++) {
+    let sum = 0;
+    for (let j = 0; j < step; j++) {
+      sum += Math.abs(float32Array[i * step + j] || 0);
+    }
+    const avg = sum / step;
+    const h = Math.max(4, Math.min(40, avg * 200));
+    bars[i].style.height = h + 'px';
+  }
+}
+
+function animateIdleVisualizer() {
+  if (STATE.isListening || STATE.isSpeaking) return;
+  const t = Date.now() / 1000;
+  for (let i = 0; i < BAR_COUNT; i++) {
+    const h = 4 + Math.sin(t * 2 + i * 0.3) * 3;
+    bars[i].style.height = h + 'px';
+  }
+  requestAnimationFrame(animateIdleVisualizer);
+}
+
+// ── Audio Playback (Gemini returns base64 PCM) ──
+
+function playAudioChunk(b64Data, mimeType) {
+  if (STATE.isMuted) return;
+
+  const sampleRate = parseInt(mimeType?.match(/rate=(\d+)/)?.[1] || '24000');
+  const raw = atob(b64Data);
+  const int16 = new Int16Array(raw.length / 2);
+  for (let i = 0; i < int16.length; i++) {
+    int16[i] = (raw.charCodeAt(i * 2 + 1) << 8) | raw.charCodeAt(i * 2);
+  }
+
+  // Convert to float32
+  const float32 = new Float32Array(int16.length);
+  for (let i = 0; i < int16.length; i++) {
+    float32[i] = int16[i] / 32768;
+  }
+
+  STATE.audioQueue.push({ data: float32, sampleRate });
+  if (!STATE.isPlayingAudio) playNextChunk();
+}
+
+async function playNextChunk() {
+  if (STATE.audioQueue.length === 0) {
+    STATE.isPlayingAudio = false;
+    return;
+  }
+
+  STATE.isPlayingAudio = true;
+  const chunk = STATE.audioQueue.shift();
+
+  if (!STATE.audioCtx) {
+    STATE.audioCtx = new AudioContext({ sampleRate: chunk.sampleRate });
+  }
+
+  const buffer = STATE.audioCtx.createBuffer(1, chunk.data.length, chunk.sampleRate);
+  buffer.getChannelData(0).set(chunk.data);
+
+  const source = STATE.audioCtx.createBufferSource();
+  source.buffer = buffer;
+  source.connect(STATE.audioCtx.destination);
+  STATE.playingSource = source;
+
+  // Update visualizer during playback
+  const analyser = STATE.audioCtx.createAnalyser();
+  analyser.fftSize = 256;
+  source.connect(analyser);
+
+  function drawPlayback() {
+    if (!STATE.isPlayingAudio) return;
+    const data = new Uint8Array(analyser.frequencyBinCount);
+    analyser.getByteFrequencyData(data);
+    const step = Math.floor(data.length / BAR_COUNT);
+    for (let i = 0; i < BAR_COUNT; i++) {
+      const h = Math.max(4, (data[i * step] / 255) * 40);
+      bars[i].style.height = h + 'px';
+    }
+    requestAnimationFrame(drawPlayback);
+  }
+  drawPlayback();
+
+  source.onended = () => {
+    playNextChunk();
+  };
+  source.start();
+}
+
+// ── WebSocket ──
+
+function connect() {
+  const proto = location.protocol === 'https:' ? 'wss' : 'ws';
+  STATE.ws = new WebSocket(`${proto}://${location.host}/ws`);
+
+  STATE.ws.onopen = () => {
+    setStatus(true);
+    statusText.textContent = 'Connecting to Gemini...';
+  };
+
+  STATE.ws.onclose = () => {
+    setStatus(false);
+    setOrbState('');
+    STATE.isReady = false;
+    STATE.isListening = false;
+    stopAudio();
+    // Reconnect after 3s
+    setTimeout(connect, 3000);
+  };
+
+  STATE.ws.onerror = (e) => {
+    showError('Connection error');
+    console.error(e);
+  };
+
+  STATE.ws.onmessage = (event) => {
+    const msg = JSON.parse(event.data);
+
+    switch (msg.type) {
+      case 'ready':
+        STATE.isReady = true;
+        statusText.textContent = 'Click to start';
+        addMessage('Hermes Voice connecté. Cliquez pour parler.', 'system');
+        animateIdleVisualizer();
+        break;
+
+      case 'audio':
+        setOrbState('speaking');
+        STATE.isSpeaking = true;
+        playAudioChunk(msg.data, msg.mimeType);
+        break;
+
+      case 'text':
+        addMessage(msg.data, 'hermes');
+        break;
+
+      case 'turn_complete':
+        STATE.isSpeaking = false;
+        STATE.isPlayingAudio = false;
+        STATE.audioQueue = [];
+        if (STATE.isListening) {
+          setOrbState('listening');
+        } else {
+          setOrbState('');
+        }
+        break;
+
+      case 'hermes_call':
+        setOrbState('thinking');
+        addMessage(msg.query, 'user');
+        statusText.textContent = 'Hermes réfléchit...';
+        break;
+
+      case 'hermes_response':
+        addMessage(msg.data, 'hermes');
+        break;
+
+      case 'error':
+        showError(msg.message);
+        break;
+    }
+  };
+}
+
+// ── Controls ──
+
+function toggleListening() {
+  if (!STATE.isReady) return;
+
+  if (STATE.isListening) {
+    STATE.isListening = false;
+    stopAudio();
+    setOrbState('');
+  } else {
+    STATE.isListening = true;
+    startAudio();
+    setOrbState('listening');
+  }
+}
+
+orb.addEventListener('click', toggleListening);
+
+$('btn-mute').addEventListener('click', () => {
+  STATE.isMuted = !STATE.isMuted;
+  $('btn-mute').className = 'btn' + (STATE.isMuted ? ' active' : '');
+  $('btn-mute').textContent = STATE.isMuted ? '🔊' : '🔇';
+});
+
+$('btn-clear').addEventListener('click', () => {
+  transcript.innerHTML = '';
+});
+
+// Keyboard shortcuts
+document.addEventListener('keydown', (e) => {
+  if (e.code === 'Space' && e.target === document.body) {
+    e.preventDefault();
+    toggleListening();
+  }
+  if (e.code === 'KeyM' && e.target === document.body) {
+    $('btn-mute').click();
+  }
+});
+
+// Start
+connect();
+</script>
+</body>
+</html>
